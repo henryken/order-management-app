@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+  <!-- Spring Boot's defaults: registers the %clr / %wEx conversion words and standard properties. -->
+  <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+
+  <!-- Framework/library logs: time, level, logger, message - no PID/app-name/thread noise. -->
+  <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+    <encoder>
+      <pattern>%clr(%d{HH:mm:ss}){faint} %clr(%-5level) %clr(%-25.25logger{25}){cyan} - %msg%n%wEx</pattern>
+    </encoder>
+  </appender>
+
+  <!-- Our own business/workflow logs: same layout, but bold green so it stands out during a demo. -->
+  <appender name="CONSOLE_BUSINESS" class="ch.qos.logback.core.ConsoleAppender">
+    <encoder>
+      <pattern>%boldGreen(%d{HH:mm:ss} %-5level %-25.25logger{25} - %msg%n%wEx)</pattern>
+    </encoder>
+  </appender>
+
+  <logger name="io.temporal.workshop" additivity="false">
+    <appender-ref ref="CONSOLE_BUSINESS"/>
+  </logger>
+
+  <root level="INFO">
+    <appender-ref ref="CONSOLE"/>
+  </root>
+</configuration>
