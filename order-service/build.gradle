@@ -1,0 +1,61 @@
+plugins {
+  id 'java'
+  id 'org.springframework.boot' version '4.1.1'
+  id 'io.spring.dependency-management' version '1.1.7'
+}
+
+group = "io.temporal.workshop"
+version = "0.0.1-SNAPSHOT"
+
+ext {
+  temporalVersion = '1.38.0'
+}
+
+java {
+  toolchain {
+    languageVersion = JavaLanguageVersion.of(25)
+  }
+}
+
+repositories {
+  mavenCentral()
+}
+
+configurations {
+  // Mockito 5 must be attached as a Java agent rather than self-attaching (JDK 21+).
+  mockitoAgent
+}
+
+dependencies {
+  implementation 'org.springframework.boot:spring-boot-starter-webmvc'
+  implementation 'org.springframework.boot:spring-boot-starter-validation'
+  implementation 'org.springframework.boot:spring-boot-starter-actuator'
+
+  // Brings in temporal-sdk, temporal-testing and the Spring auto-configuration.
+  implementation "io.temporal:temporal-spring-boot-starter:${temporalVersion}"
+
+  developmentOnly 'org.springframework.boot:spring-boot-devtools'
+
+  testImplementation 'org.springframework.boot:spring-boot-starter-test'
+  testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
+  testImplementation "io.temporal:temporal-testing:${temporalVersion}"
+  testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+
+  mockitoAgent('org.mockito:mockito-core') { transitive = false }
+}
+
+tasks.withType(JavaCompile).configureEach {
+  // Keep parameter names in the bytecode: Temporal's Jackson payload converter and
+  // Spring's binding both benefit from them.
+  // Spring Boot 4 deprecates a fair number of Spring 6 APIs; name them at compile time.
+  options.compilerArgs << '-parameters' << '-Xlint:deprecation'
+}
+
+tasks.named('test') {
+  useJUnitPlatform()
+  jvmArgs "-javaagent:${configurations.mockitoAgent.asPath}"
+  testLogging {
+    events = ['passed', 'skipped', 'failed']
+    exceptionFormat = 'full'
+  }
+}
