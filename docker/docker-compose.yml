@@ -49,6 +49,19 @@ services:
     entrypoint: ["/toxiproxy-cli"]
     command: ["--host", "http://toxiproxy:8474", "create", "-l", "0.0.0.0:8501", "-u", "host.docker.internal:8081", "payment-proxy"]
 
+  # Adds a latency toxic to payment-proxy (in its own one-shot container,
+  # since the toxiproxy image has no shell to chain "create" + "toxic add")
+  toxiproxy-seed-payment-toxic:
+    image: ghcr.io/shopify/toxiproxy:2.12.0
+    container_name: toxiproxy-seed-payment-toxic
+    depends_on:
+      toxiproxy-seed-payment:
+        condition: service_completed_successfully
+    networks:
+      - order-management-net
+    entrypoint: ["/toxiproxy-cli"]
+    command: ["--host", "http://toxiproxy:8474", "toxic", "add", "-t", "latency", "-a", "latency=3000", "-a", "jitter=1000", "payment-proxy"]
+
   toxiproxy-seed-inventory:
     image: ghcr.io/shopify/toxiproxy:2.12.0
     container_name: toxiproxy-seed-inventory
@@ -59,6 +72,18 @@ services:
       - order-management-net
     entrypoint: ["/toxiproxy-cli"]
     command: ["--host", "http://toxiproxy:8474", "create", "-l", "0.0.0.0:8502", "-u", "host.docker.internal:8082", "inventory-proxy"]
+
+  # Adds a latency toxic to inventory-proxy
+  toxiproxy-seed-inventory-toxic:
+    image: ghcr.io/shopify/toxiproxy:2.12.0
+    container_name: toxiproxy-seed-inventory-toxic
+    depends_on:
+      toxiproxy-seed-inventory:
+        condition: service_completed_successfully
+    networks:
+      - order-management-net
+    entrypoint: ["/toxiproxy-cli"]
+    command: ["--host", "http://toxiproxy:8474", "toxic", "add", "-t", "latency", "-a", "latency=2000", "-a", "jitter=500", "inventory-proxy"]
 
   toxiproxy-seed-shipping:
     image: ghcr.io/shopify/toxiproxy:2.12.0
@@ -71,6 +96,18 @@ services:
     entrypoint: ["/toxiproxy-cli"]
     command: ["--host", "http://toxiproxy:8474", "create", "-l", "0.0.0.0:8503", "-u", "host.docker.internal:8083", "shipping-proxy"]
 
+  # Adds a latency toxic to shipping-proxy
+  toxiproxy-seed-shipping-toxic:
+    image: ghcr.io/shopify/toxiproxy:2.12.0
+    container_name: toxiproxy-seed-shipping-toxic
+    depends_on:
+      toxiproxy-seed-shipping:
+        condition: service_completed_successfully
+    networks:
+      - order-management-net
+    entrypoint: ["/toxiproxy-cli"]
+    command: ["--host", "http://toxiproxy:8474", "toxic", "add", "-t", "latency", "-a", "latency=3500", "-a", "jitter=1000", "shipping-proxy"]
+
   toxiproxy-seed-notification:
     image: ghcr.io/shopify/toxiproxy:2.12.0
     container_name: toxiproxy-seed-notification
@@ -81,6 +118,18 @@ services:
       - order-management-net
     entrypoint: ["/toxiproxy-cli"]
     command: ["--host", "http://toxiproxy:8474", "create", "-l", "0.0.0.0:8504", "-u", "host.docker.internal:8084", "notification-proxy"]
+
+  # Adds a latency toxic to notification-proxy
+  toxiproxy-seed-notification-toxic:
+    image: ghcr.io/shopify/toxiproxy:2.12.0
+    container_name: toxiproxy-seed-notification-toxic
+    depends_on:
+      toxiproxy-seed-notification:
+        condition: service_completed_successfully
+    networks:
+      - order-management-net
+    entrypoint: ["/toxiproxy-cli"]
+    command: ["--host", "http://toxiproxy:8474", "toxic", "add", "-t", "latency", "-a", "latency=1000", "-a", "jitter=100", "notification-proxy"]
 
   # Toxihub Dashboard
   toxihub:
