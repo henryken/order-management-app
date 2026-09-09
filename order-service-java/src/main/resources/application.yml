@@ -1,0 +1,41 @@
+spring:
+  application:
+    name: order-service
+
+  output:
+    ansi:
+      enabled: always
+
+  temporal:
+    namespace: ${TEMPORAL_NAMESPACE:default}
+    connection:
+      target: ${TEMPORAL_ADDRESS:127.0.0.1:7233}
+
+    workers-auto-discovery:
+      enabled: true
+      workflow-packages: io.temporal.workshop.orderservice
+
+    start-workers: true
+
+
+services:
+  payment-url: http://localhost:8501
+  inventory-url: http://localhost:8502
+  shipping-url: http://localhost:8503
+  notification-url: http://localhost:8504
+
+
+server:
+  port: 8080
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+
+logging:
+  level:
+    io.temporal: INFO
+    io.temporal.workshop: DEBUG
+    org.springframework.web.servlet.mvc.method.annotation.ExceptionHandlerExceptionResolver: ERROR
