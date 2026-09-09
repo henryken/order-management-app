@@ -1,0 +1,67 @@
+### Node.js (downstream-services) ###
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm
+.env
+.env.*
+!.env.example
+
+### Java / Spring Boot ###
+# Compiled output
+target/
+build/
+out/
+*.class
+*.jar
+*.war
+!.mvn/wrapper/maven-wrapper.jar
+
+# Maven
+.mvn/timing.properties
+.mvn/wrapper/maven-wrapper.properties
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+dependency-reduced-pom.xml
+buildNumber.properties
+.flattened-pom.xml
+
+# Gradle
+.gradle/
+gradle-app.setting
+!gradle-wrapper.jar
+!gradle-wrapper.properties
+
+### Docker ###
+docker/**/.env
+docker-compose.override.yml
+*.pid
+
+### JetBrains IDEs (IntelliJ IDEA / WebStorm) ###
+.idea/
+*.iml
+*.ipr
+*.iws
+out/
+
+### Junie (JetBrains AI agent) ###
+.junie/
+
+### VS Code ###
+.vscode/
+
+### OS ###
+.DS_Store
+Thumbs.db
+
+### Logs ###
+logs/
+*.log
+
+### Misc ###
+*.tmp
+*.bak
