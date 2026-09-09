@@ -1,0 +1,96 @@
+networks:
+  order-management-net:
+    name: order-management-net
+    driver: bridge
+
+services:
+  # Local Temporal Service
+  temporal:
+    image: temporalio/temporal:1.8.3
+    container_name: temporal
+    command: ["server", "start-dev", "--ip", "0.0.0.0", "--ui-ip", "0.0.0.0"]
+    ports:
+      - "7233:7233" # gRPC
+      - "8233:8233" # Temporal Web UI
+    networks:
+      - order-management-net
+
+  # Toxiproxy Daemon
+  toxiproxy:
+    image: ghcr.io/shopify/toxiproxy:2.12.0
+    container_name: toxiproxy
+    ports:
+      - "8474:8474" # Admin API
+      - "8501:8501" # -> Payment (8081)
+      - "8502:8502" # -> Inventory (8082)
+      - "8503:8503" # -> Shipping (8083)
+      - "8504:8504" # -> Notification (8084)
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - order-management-net
+    healthcheck:
+      test: ["CMD", "/toxiproxy-cli", "--host", "http://localhost:8474", "list"]
+      interval: 2s
+      timeout: 2s
+      retries: 15
+
+  # Proxy auto-configuration
+  # (the toxiproxy image has no shell, so each proxy is seeded by its own
+  # one-shot container instead of a single /bin/sh -c script)
+  toxiproxy-seed-payment:
+    image: ghcr.io/shopify/toxiproxy:2.12.0
+    container_name: toxiproxy-seed-payment
+    depends_on:
+      toxiproxy:
+        condition: service_healthy
+    networks:
+      - order-management-net
+    entrypoint: ["/toxiproxy-cli"]
+    command: ["--host", "http://toxiproxy:8474", "create", "-l", "0.0.0.0:8501", "-u", "host.docker.internal:8081", "payment-proxy"]
+
+  toxiproxy-seed-inventory:
+    image: ghcr.io/shopify/toxiproxy:2.12.0
+    container_name: toxiproxy-seed-inventory
+    depends_on:
+      toxiproxy:
+        condition: service_healthy
+    networks:
+      - order-management-net
+    entrypoint: ["/toxiproxy-cli"]
+    command: ["--host", "http://toxiproxy:8474", "create", "-l", "0.0.0.0:8502", "-u", "host.docker.internal:8082", "inventory-proxy"]
+
+  toxiproxy-seed-shipping:
+    image: ghcr.io/shopify/toxiproxy:2.12.0
+    container_name: toxiproxy-seed-shipping
+    depends_on:
+      toxiproxy:
+        condition: service_healthy
+    networks:
+      - order-management-net
+    entrypoint: ["/toxiproxy-cli"]
+    command: ["--host", "http://toxiproxy:8474", "create", "-l", "0.0.0.0:8503", "-u", "host.docker.internal:8083", "shipping-proxy"]
+
+  toxiproxy-seed-notification:
+    image: ghcr.io/shopify/toxiproxy:2.12.0
+    container_name: toxiproxy-seed-notification
+    depends_on:
+      toxiproxy:
+        condition: service_healthy
+    networks:
+      - order-management-net
+    entrypoint: ["/toxiproxy-cli"]
+    command: ["--host", "http://toxiproxy:8474", "create", "-l", "0.0.0.0:8504", "-u", "host.docker.internal:8084", "notification-proxy"]
+
+  # Toxihub Dashboard
+  toxihub-ui:
+    image: toxihub:latest
+    container_name: toxihub
+    ports:
+      - "7072:7072"
+    environment:
+      - TOXIPROXY_HOST=toxiproxy
+    depends_on:
+      - toxiproxy
+    networks:
+      - order-management-net
