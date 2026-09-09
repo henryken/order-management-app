@@ -53,9 +53,15 @@ tasks.withType(JavaCompile).configureEach {
 
 tasks.named('test') {
   useJUnitPlatform()
-  jvmArgs "-javaagent:${configurations.mockitoAgent.asPath}"
+  jvmArgs "-javaagent:${configurations.mockitoAgent.asPath}", '--sun-misc-unsafe-memory-access=allow'
   testLogging {
     events = ['passed', 'skipped', 'failed']
     exceptionFormat = 'full'
   }
+}
+
+tasks.named('bootRun') {
+  // protobuf-java (via Temporal's gRPC client) still calls terminally-deprecated
+  // sun.misc.Unsafe methods; silence the JVM warning until it's fixed upstream.
+  jvmArgs '--sun-misc-unsafe-memory-access=allow'
 }
