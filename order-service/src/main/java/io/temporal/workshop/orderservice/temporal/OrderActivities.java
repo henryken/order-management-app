@@ -9,11 +9,18 @@ public interface OrderActivities {
   void chargePayment(String orderId, double amount);
 
   @ActivityMethod
+  void refundPayment(String orderId, double amount);
+
+  @ActivityMethod
   void reserveInventory(String item, int quantity);
+
+  @ActivityMethod
+  void releaseInventory(String item, int quantity);
 
   @ActivityMethod
   void dispatchShipping(String orderId, String address);
 
   @ActivityMethod
   void sendNotification(String orderId, String type, String message);
+
 }

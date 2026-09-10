@@ -30,12 +30,22 @@ public class OrderActivitiesImpl implements OrderActivities {
   }
 
   @Override
+  public void refundPayment(String orderId, double amount) {
+    paymentService.refund(orderId, amount);
+  }
+
+  @Override
   public void reserveInventory(String item, int quantity) {
     try {
       inventoryService.reserve(item, quantity);
     } catch (IllegalArgumentException e) {
       throw ApplicationFailure.newNonRetryableFailure(e.getMessage(), "ITEM_OUT_OF_STOCK");
     }
+  }
+
+  @Override
+  public void releaseInventory(String item, int quantity) {
+    inventoryService.release(item, quantity);
   }
 
   @Override
