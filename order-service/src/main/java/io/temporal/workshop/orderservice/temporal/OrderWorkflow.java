@@ -17,4 +17,7 @@ public interface OrderWorkflow {
   @QueryMethod
   OrderStatus getStatus();
 
+  @SignalMethod
+  void approveDispatch(String approverEmail);
+
 }
