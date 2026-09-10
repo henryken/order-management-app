@@ -20,4 +20,7 @@ public interface OrderWorkflow {
   @SignalMethod
   void approveDispatch(String approverEmail);
 
+  @SignalMethod
+  void cancelOrder(String reason);
+
 }
