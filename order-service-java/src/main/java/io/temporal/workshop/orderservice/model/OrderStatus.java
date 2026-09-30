@@ -1,0 +1,14 @@
+package io.temporal.workshop.orderservice.model;
+
+public enum OrderStatus {
+  PENDING,
+  PAYMENT_PROCESSING,
+  RESERVING_INVENTORY,
+  AWAITING_GRACE_PERIOD,
+  AWAITING_APPROVAL,
+  DISPATCHING,
+  COMPLETED,
+  CANCELLING,
+  CANCELLED,
+  FAILED
+}

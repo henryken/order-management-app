@@ -26,6 +26,6 @@ public class NaiveOrderService {
     paymentService.charge(order.orderId(), order.amount());
     inventoryService.reserve(order.item(), order.quantity());
     shippingService.dispatch(order.orderId(), order.address());
-    notificationService.send(order.orderId(), "CONFIRMATION", "Dispatched!");
+    notificationService.send(order.orderId(), "DISPATCHED", "Dispatched!");
   }
 }
