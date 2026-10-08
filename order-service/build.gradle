@@ -11,11 +11,22 @@ ext {
   temporalVersion = '1.38.0'
 }
 
+def minimumJavaVersion = 17
+
 java {
-  toolchain {
-    languageVersion = JavaLanguageVersion.of(25)
-  }
+  sourceCompatibility = JavaVersion.toVersion(minimumJavaVersion)
+  targetCompatibility = JavaVersion.toVersion(minimumJavaVersion)
 }
+
+// --sun-misc-unsafe-memory-access only exists on JDK 23+. Passing it to an older JVM
+// makes the JVM refuse to start ("Unrecognized option"), so only add it when supported.
+def unsafeMemoryAccessJvmArgs = JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_23) ?
+  ['--sun-misc-unsafe-memory-access=allow'] : []
+
+// grpc-netty-shaded loads a native library via System.loadLibrary; JDK 24+ warns unless
+// native access is enabled. The flag exists since JDK 22 (earlier JVMs reject it).
+def nativeAccessJvmArgs = JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_22) ?
+  ['--enable-native-access=ALL-UNNAMED'] : []
 
 repositories {
   mavenCentral()
@@ -49,11 +60,14 @@ tasks.withType(JavaCompile).configureEach {
   // Spring's binding both benefit from them.
   // Spring Boot 4 deprecates a fair number of Spring 6 APIs; name them at compile time.
   options.compilerArgs << '-parameters' << '-Xlint:deprecation'
+  options.release = minimumJavaVersion
 }
 
 tasks.named('test') {
   useJUnitPlatform()
-  jvmArgs "-javaagent:${configurations.mockitoAgent.asPath}", '--sun-misc-unsafe-memory-access=allow'
+  jvmArgs "-javaagent:${configurations.mockitoAgent.asPath}"
+  jvmArgs unsafeMemoryAccessJvmArgs
+  jvmArgs nativeAccessJvmArgs
   testLogging {
     events = ['passed', 'skipped', 'failed']
     exceptionFormat = 'full'
@@ -62,6 +76,7 @@ tasks.named('test') {
 
 tasks.named('bootRun') {
   // protobuf-java (via Temporal's gRPC client) still calls terminally-deprecated
-  // sun.misc.Unsafe methods; silence the JVM warning until it's fixed upstream.
-  jvmArgs '--sun-misc-unsafe-memory-access=allow'
+  // sun.misc.Unsafe methods; silence the JVM warning (JDK 23+ only) until it's fixed upstream.
+  jvmArgs unsafeMemoryAccessJvmArgs
+  jvmArgs nativeAccessJvmArgs
 }
