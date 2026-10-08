@@ -23,7 +23,8 @@ services before (or alongside) `docker-compose up`.
 ## Prerequisites
 
 - Docker (and Docker Compose)
-- Java 17+ (uses the Gradle wrapper, no local Gradle install needed)
+- Java 17 or newer. The Gradle wrapper uses the JDK from
+  `JAVA_HOME` (or `java` on your `PATH`), so no Gradle install or extra JDK download is needed
 - Node.js 18+
 - [HTTPie](https://httpie.io/) (`http`) for the example requests below — any HTTP client works
 
