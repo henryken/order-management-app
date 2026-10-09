@@ -8,6 +8,11 @@ approval step before dispatch, and a cancellation grace period.
 
 - **order-service-java** — Spring Boot app (port `8080`) hosting both the original `NaiveOrderService`
   and the Temporal-based `OrderWorkflow`, plus the worker that executes it.
+- **order-service-go**, **order-service-python**, **order-service-ts** — the same order service
+  (REST API plus worker) in Go, Python and TypeScript. They share the REST contract, the workflow
+  and activity names, the `order-service` task queue and the JSON payloads, so they are
+  interchangeable: run **one** of them at a time on port `8080`. They currently implement the
+  naive endpoint and the basic workflow only (no signals or compensation yet).
 - **downstream-services** — a Node/Express app simulating the Payment (`8081`), Inventory (`8082`),
   Shipping (`8083`), and Notification (`8084`) services the workflow calls out to.
 - **docker/docker-compose.yml** — spins up:
@@ -58,6 +63,15 @@ cd order-service-java
 
 The Spring Boot app starts on `8080`, connects to Temporal at `127.0.0.1:7233`, and registers a
 worker on the `order-processing` task queue.
+
+To run another language instead (all listen on `8080` and read `TEMPORAL_ADDRESS` and
+`SERVICES_*_URL`):
+
+```bash
+cd order-service-go && go run .                                  # Go 1.26+
+cd order-service-python && uv run order-service                # Python 3.10+, uv
+cd order-service-ts && npm install && npm start                  # Node 18+
+```
 
 ## 4. Send requests with HTTPie
 
