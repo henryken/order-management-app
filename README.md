@@ -6,7 +6,7 @@ approval step before dispatch, and a cancellation grace period.
 
 ## Architecture
 
-- **order-service** — Spring Boot app (port `8080`) hosting both the original `NaiveOrderService`
+- **order-service-java** — Spring Boot app (port `8080`) hosting both the original `NaiveOrderService`
   and the Temporal-based `OrderWorkflow`, plus the worker that executes it.
 - **downstream-services** — a Node/Express app simulating the Payment (`8081`), Inventory (`8082`),
   Shipping (`8083`), and Notification (`8084`) services the workflow calls out to.
@@ -17,7 +17,7 @@ approval step before dispatch, and a cancellation grace period.
   - **Toxihub** UI (`7072`) for viewing/toggling those proxies
 
 The order-service talks to the downstream services *through* Toxiproxy (see `services.*-url` in
-`order-service/src/main/resources/application.yml`), not directly — so start the downstream
+`order-service-java/src/main/resources/application.yml`), not directly — so start the downstream
 services before (or alongside) `docker-compose up`.
 
 ## Prerequisites
@@ -52,7 +52,7 @@ This starts the Payment, Inventory, Shipping, and Notification mock services on 
 ## 3. Start the order service
 
 ```bash
-cd order-service
+cd order-service-java
 ./gradlew bootRun
 ```
 

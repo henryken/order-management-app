@@ -10,4 +10,4 @@ curl -sSf https://temporal.download/cli.sh | sh
 sudo ln -sf "$HOME/.temporalio/bin/temporal" /usr/local/bin/temporal
 
 npm install --prefix downstream-services
-(cd order-service && ./gradlew --no-daemon classes)
+(cd order-service-java && ./gradlew --no-daemon classes)
