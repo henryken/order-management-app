@@ -1,0 +1,13 @@
+#!/bin/bash
+# Usage: start-service java|go|python|ts|dotnet
+# Runs one order service variant on port 8080. Works from any directory.
+repo="$(dirname "$(readlink -f "$0")")/../.."
+cd "$repo" || exit 1
+case "${1:-}" in
+  java)          cd order-service-java && exec ./gradlew bootRun ;;
+  go)            cd order-service-go && exec go run . ;;
+  python)        cd order-service-python && uv sync -q && exec uv run order-service ;;
+  ts|typescript) cd order-service-ts && npm install --no-audit --no-fund && exec npm start ;;
+  dotnet)        cd order-service-dotnet && exec dotnet run ;;
+  *) echo "usage: start-service java|go|python|ts|dotnet"; exit 1 ;;
+esac

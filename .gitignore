@@ -68,6 +68,9 @@ logs/
 *.tmp
 *.bak
 
+### Dev container dependency caches ###
+.devcache/
+
 ### .NET ###
 bin/
 obj/

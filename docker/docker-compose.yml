@@ -6,7 +6,7 @@ networks:
 services:
   # Local Temporal Service
   temporal:
-    image: temporalio/temporal:1.8.3
+    image: temporalio/temporal:release
     container_name: temporal
     command: ["server", "start-dev", "--ip", "0.0.0.0", "--ui-ip", "0.0.0.0"]
     ports:

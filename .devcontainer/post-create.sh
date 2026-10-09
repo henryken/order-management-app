@@ -1,13 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# HTTPie (`http`) for the README's example requests
-sudo apt-get update -y
-sudo apt-get install -y --no-install-recommends httpie
+# Helper commands: start-service java|go|python|ts|dotnet, kill-service
+sudo ln -sf /workspaces/.devcontainer/bin/start-service /usr/local/bin/start-service
+sudo ln -sf /workspaces/.devcontainer/bin/kill-service /usr/local/bin/kill-service
 
-# Temporal CLI. Defaults to localhost:7233, which is the sidecar Temporal server.
-curl -sSf https://temporal.download/cli.sh | sh
-sudo ln -sf "$HOME/.temporalio/bin/temporal" /usr/local/bin/temporal
+# Tools (HTTPie, temporal, uv) are installed in .devcontainer/Dockerfile. The caches these
+# commands fill (Gradle, npm, uv, Go modules) live in /workspaces/.devcache (see
+# docker-compose.yml), so they are fast after the first create.
 
-npm install --prefix downstream-services
 (cd order-service-java && ./gradlew --no-daemon classes)
+(cd order-service-go && go build ./...)
+(cd order-service-python && uv sync)
+npm ci --prefix order-service-ts
+(cd order-service-dotnet && dotnet restore)
+

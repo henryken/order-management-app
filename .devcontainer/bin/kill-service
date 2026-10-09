@@ -1,0 +1,6 @@
+#!/bin/bash
+# SIGKILL whatever listens on 8080. No graceful shutdown, like a crash.
+pids=$(lsof -ti tcp:8080 -sTCP:LISTEN || true)
+if [ -z "$pids" ]; then echo "Nothing is listening on 8080."; exit 0; fi
+kill -9 $pids
+echo "Killed order service (pid $pids)."
