@@ -25,7 +25,7 @@ mcr.microsoft.com/devcontainers/base:ubuntu
   local MIN_FREE_DISK_GB=10
   # Only the ports the devcontainer forwards to the host (see forwardPorts in devcontainer.json)
   local PORTS="8080 7233 8233 7072 8474"
-  local HOSTS="registry-1.docker.io ghcr.io mcr.microsoft.com services.gradle.org repo.maven.apache.org registry.npmjs.org temporal.download"
+  local HOSTS="registry-1.docker.io ghcr.io mcr.microsoft.com services.gradle.org repo.maven.apache.org registry.npmjs.org temporal.download proxy.golang.org pypi.org files.pythonhosted.org astral.sh"
 
   local WARM=0 arg
   for arg in "$@"; do

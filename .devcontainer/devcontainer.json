@@ -12,12 +12,19 @@
     },
     "ghcr.io/devcontainers/features/node:1": {
       "version": "22"
+    },
+    "ghcr.io/devcontainers/features/go:1": {
+      "version": "1.26"
+    },
+    "ghcr.io/devcontainers/features/python:1": {
+      "version": "3.12",
+      "installTools": false
     }
   },
   "postCreateCommand": "bash .devcontainer/post-create.sh",
   "forwardPorts": [8080, 7233, 8233, 7072, 8474],
   "portsAttributes": {
-    "8080": { "label": "order-service" },
+    "8080": { "label": "order-service (one language at a time)" },
     "7233": { "label": "Temporal gRPC" },
     "8233": { "label": "Temporal Web UI" },
     "7072": { "label": "Toxihub" },
@@ -31,7 +38,9 @@
       "extensions": [
         "vscjava.vscode-java-pack",
         "vmware.vscode-boot-dev-pack",
-        "vscjava.vscode-gradle"
+        "vscjava.vscode-gradle",
+        "golang.go",
+        "ms-python.python"
       ]
     }
   }
