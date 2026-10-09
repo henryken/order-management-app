@@ -17,15 +17,17 @@ main() {
   # Keep in sync with .devcontainer/docker-compose.yml
   local IMAGES="
 temporalio/temporal:1.8.3
+node:22-slim
 ghcr.io/shopify/toxiproxy:2.12.0
 ghcr.io/henryken/toxihub:latest
-mcr.microsoft.com/devcontainers/base:ubuntu
+ghcr.io/henryken/order-mgmt-devcontainer:1
 "
   local MIN_DOCKER_MEM_GB=4
   local MIN_FREE_DISK_GB=10
-  # Only the ports the devcontainer forwards to the host (see forwardPorts in devcontainer.json)
+  # Ports opened on the host: 8080 is forwarded by devcontainer.json (forwardPorts); the rest are
+  # published by .devcontainer/docker-compose.yml
   local PORTS="8080 7233 8233 7072 8474"
-  local HOSTS="registry-1.docker.io ghcr.io mcr.microsoft.com services.gradle.org repo.maven.apache.org registry.npmjs.org temporal.download"
+  local HOSTS="registry-1.docker.io ghcr.io services.gradle.org plugins.gradle.org repo.maven.apache.org registry.npmjs.org proxy.golang.org sum.golang.org pypi.org files.pythonhosted.org"
 
   local WARM=0 arg
   for arg in "$@"; do
@@ -147,7 +149,7 @@ mcr.microsoft.com/devcontainers/base:ubuntu
   fi
 
   # ------------------------------------------------------------------------
-  section "5. Local ports (forwarded from the container to your laptop)"
+  section "5. Local ports (opened on your laptop by the dev container)"
 
   # Prints "<pid> <command>" of the process listening on port $1, or nothing if free.
   # Returns 2 if no tool is available to tell.
@@ -219,7 +221,7 @@ mcr.microsoft.com/devcontainers/base:ubuntu
       fi
     done
     echo
-    echo "  Note: further tools are downloaded when you first open the project in its dev container."
+    echo "  Note: the toolchains are in the image. Project dependencies (Gradle, Maven, npm, Go modules, Python packages) are downloaded the first time you open the project in its dev container."
   fi
 
   # ------------------------------------------------------------------------
