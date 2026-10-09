@@ -1,0 +1,38 @@
+{
+  "name": "Order Management App",
+  "dockerComposeFile": "docker-compose.yml",
+  "service": "app",
+  "workspaceFolder": "/workspaces",
+  "features": {
+    "ghcr.io/devcontainers/features/java:1": {
+      "version": "25",
+      "jdkDistro": "tem",
+      "installGradle": false,
+      "installMaven": false
+    },
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "22"
+    }
+  },
+  "postCreateCommand": "bash .devcontainer/post-create.sh",
+  "forwardPorts": [8080, 7233, 8233, 7072, 8474],
+  "portsAttributes": {
+    "8080": { "label": "order-service" },
+    "7233": { "label": "Temporal gRPC" },
+    "8233": { "label": "Temporal Web UI" },
+    "7072": { "label": "Toxihub" },
+    "8474": { "label": "Toxiproxy admin" }
+  },
+  "customizations": {
+    "jetbrains": {
+      "backend": "IntelliJ"
+    },
+    "vscode": {
+      "extensions": [
+        "vscjava.vscode-java-pack",
+        "vmware.vscode-boot-dev-pack",
+        "vscjava.vscode-gradle"
+      ]
+    }
+  }
+}

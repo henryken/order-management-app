@@ -1,0 +1,2 @@
+# Shell scripts run inside the Linux devcontainer; CRLF endings break them ("bad interpreter: ^M").
+*.sh text eol=lf
