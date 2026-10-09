@@ -1,0 +1,28 @@
+{
+  // Used only to build the published image (see ../build-image.sh). It has no repo
+  // dependency: the Dockerfile tools plus the language toolchains below are baked into
+  // the image, and their settings are stored in the image's devcontainer.metadata label.
+  "name": "Order Management App (prebuild)",
+  "build": {
+    "dockerfile": "../Dockerfile",
+    "context": ".."
+  },
+  "features": {
+    "ghcr.io/devcontainers/features/java:1": {
+      "version": "25",
+      "jdkDistro": "tem",
+      "installGradle": false,
+      "installMaven": false
+    },
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "22"
+    },
+    "ghcr.io/devcontainers/features/go:1": {
+      "version": "1.26"
+    },
+    "ghcr.io/devcontainers/features/python:1": {
+      "version": "3.12",
+      "installTools": false
+    }
+  }
+}

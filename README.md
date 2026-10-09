@@ -8,6 +8,11 @@ approval step before dispatch, and a cancellation grace period.
 
 - **order-service-java** — Spring Boot app (port `8080`) hosting both the original `NaiveOrderService`
   and the Temporal-based `OrderWorkflow`, plus the worker that executes it.
+- **order-service-go**, **order-service-python**, **order-service-ts** — the same order service
+  (REST API plus worker) in Go, Python and TypeScript. They share the REST contract, the workflow
+  and activity names, the `order-service` task queue and the JSON payloads, so they are
+  interchangeable: run **one** of them at a time on port `8080`. They currently implement the
+  naive endpoint and the basic workflow only (no signals or compensation yet).
 - **downstream-services** — a Node/Express app simulating the Payment (`8081`), Inventory (`8082`),
   Shipping (`8083`), and Notification (`8084`) services the workflow calls out to.
 - **docker/docker-compose.yml** — spins up:
@@ -27,6 +32,38 @@ services before (or alongside) `docker-compose up`.
   `JAVA_HOME` (or `java` on your `PATH`), so no Gradle install or extra JDK download is needed
 - Node.js 18+
 - [HTTPie](https://httpie.io/) (`http`) for the example requests below — any HTTP client works
+
+## Option: use the dev container
+
+Instead of installing the prerequisites and running steps 1 and 2 yourself, you can open the
+repo in the dev container (VS Code: **Dev Containers: Reopen in Container**; IntelliJ: Dev
+Containers). It provides the toolchains (Java, Go, Python/uv, Node), HTTPie and the `temporal`
+CLI, and starts Temporal, Toxiproxy, Toxihub and the downstream mock services for you, with the
+order service already pointed at them (`TEMPORAL_ADDRESS`, `SERVICES_*_URL`).
+
+Skip steps 1 and 2 and go straight to **step 3**, running the commands in the container's
+terminal. The repo is mounted at `/workspaces`. These are reachable from your machine:
+
+| What | URL |
+| --- | --- |
+| order-service | http://localhost:8080 |
+| Temporal Web UI | http://localhost:8233 |
+| Toxihub | http://localhost:7072 |
+
+Notes:
+
+- The mock services' logs are in the `downstream` container
+  (`docker logs -f devcontainer-downstream-1`), not in a terminal.
+- The dev container publishes the same ports as `docker/docker-compose.yml` (7233, 8233, 7072,
+  8474), so don't run both stacks at once.
+- The container uses a prebuilt image, `ghcr.io/henryken/order-mgmt-devcontainer`, so opening
+  it only pulls an image. To change the toolchains, edit `.devcontainer/Dockerfile` or
+  `.devcontainer/prebuild/devcontainer.json`, then run
+  `.devcontainer/build-image.sh <version> --push` and bump the tag in
+  `.devcontainer/docker-compose.yml`.
+- After changing `.devcontainer/`, rebuild the container. If you recreate it from the IDE and
+  something looks stale, run
+  `docker compose -p devcontainer -f .devcontainer/docker-compose.yml down` and reopen.
 
 ## 1. Start the infrastructure (Temporal + Toxiproxy)
 
@@ -58,6 +95,15 @@ cd order-service-java
 
 The Spring Boot app starts on `8080`, connects to Temporal at `127.0.0.1:7233`, and registers a
 worker on the `order-processing` task queue.
+
+To run another language instead (all listen on `8080` and read `TEMPORAL_ADDRESS` and
+`SERVICES_*_URL`):
+
+```bash
+cd order-service-go && go run .                                  # Go 1.26+
+cd order-service-python && uv run order-service                # Python 3.10+, uv
+cd order-service-ts && npm install && npm start                  # Node 18+
+```
 
 ## 4. Send requests with HTTPie
 

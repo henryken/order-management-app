@@ -1,75 +1,101 @@
-# Dev container stack. The sidecars share the "app" container's network namespace
-# (network_mode: service:app), so everything is reachable on localhost exactly as in
-# the README (Temporal on 7233, Toxiproxy on 8501-8504, downstream services on 8081-8084)
-# and no application config needs to change.
+# Dev container stack. Everything runs on the default compose network and is reached by
+# service name. The "app" container (where you run the order service) is pointed at the
+# sidecars through the env vars below, which every order-service variant already reads.
+# Sidecar ports that you open from your machine are published here; 8080 is forwarded by
+# devcontainer.json because the order service runs inside "app".
 
 x-toxiproxy: &toxiproxy
   image: ghcr.io/shopify/toxiproxy:2.12.0
-  network_mode: service:app
   entrypoint: ["/toxiproxy-cli"]
 
 services:
   app:
-    image: mcr.microsoft.com/devcontainers/base:ubuntu
+    # Prebuilt by build-image.sh (Dockerfile + the features in prebuild/devcontainer.json)
+    image: ghcr.io/henryken/order-mgmt-devcontainer:1
     command: sleep infinity
     volumes:
       - ..:/workspaces:cached
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+      # Dependency caches live in the repo (gitignored) so they survive container recreation
+      GRADLE_USER_HOME: /workspaces/.devcache/gradle
+      npm_config_cache: /workspaces/.devcache/npm
+      UV_CACHE_DIR: /workspaces/.devcache/uv
+      GOMODCACHE: /workspaces/.devcache/go-mod
+      # Keep the Go module cache writable so `rm -rf .devcache` works from the host
+      GOFLAGS: -modcacherw
+      SERVICES_PAYMENT_URL: http://toxiproxy:8501
+      SERVICES_INVENTORY_URL: http://toxiproxy:8502
+      SERVICES_SHIPPING_URL: http://toxiproxy:8503
+      SERVICES_NOTIFICATION_URL: http://toxiproxy:8504
 
   temporal:
     image: temporalio/temporal:1.8.3
-    network_mode: service:app
     command: ["server", "start-dev", "--ip", "0.0.0.0", "--ui-ip", "0.0.0.0"]
+    ports:
+      - "7233:7233" # gRPC
+      - "8233:8233" # Web UI
+
+  # Mock Payment (8081), Inventory (8082), Shipping (8083) and Notification (8084) services.
+  downstream:
+    image: node:22-slim
+    working_dir: /workspaces/downstream-services
+    volumes:
+      - ..:/workspaces:cached
+    command: ["sh", "-c", "npm ci --no-audit --no-fund && node server.js"]
+    restart: unless-stopped
 
   toxiproxy:
     image: ghcr.io/shopify/toxiproxy:2.12.0
-    network_mode: service:app
+    ports:
+      - "8474:8474" # Admin API
     healthcheck:
       test: ["CMD", "/toxiproxy-cli", "--host", "http://localhost:8474", "list"]
       interval: 2s
       timeout: 2s
       retries: 15
 
-  # One-shot seeders (the toxiproxy image has no shell). Upstreams are localhost since
-  # the downstream services run inside the dev container.
+  # One-shot seeders (the toxiproxy image has no shell).
   seed-payment:
     <<: *toxiproxy
     depends_on: { toxiproxy: { condition: service_healthy } }
-    command: ["--host", "http://localhost:8474", "create", "-l", "0.0.0.0:8501", "-u", "localhost:8081", "payment-proxy"]
+    command: ["--host", "http://toxiproxy:8474", "create", "-l", "0.0.0.0:8501", "-u", "downstream:8081", "payment-proxy"]
   seed-payment-toxic:
     <<: *toxiproxy
     depends_on: { seed-payment: { condition: service_completed_successfully } }
-    command: ["--host", "http://localhost:8474", "toxic", "add", "-t", "latency", "-a", "latency=3000", "-a", "jitter=1000", "payment-proxy"]
+    command: ["--host", "http://toxiproxy:8474", "toxic", "add", "-t", "latency", "-a", "latency=3000", "-a", "jitter=1000", "payment-proxy"]
 
   seed-inventory:
     <<: *toxiproxy
     depends_on: { toxiproxy: { condition: service_healthy } }
-    command: ["--host", "http://localhost:8474", "create", "-l", "0.0.0.0:8502", "-u", "localhost:8082", "inventory-proxy"]
+    command: ["--host", "http://toxiproxy:8474", "create", "-l", "0.0.0.0:8502", "-u", "downstream:8082", "inventory-proxy"]
   seed-inventory-toxic:
     <<: *toxiproxy
     depends_on: { seed-inventory: { condition: service_completed_successfully } }
-    command: ["--host", "http://localhost:8474", "toxic", "add", "-t", "latency", "-a", "latency=2000", "-a", "jitter=500", "inventory-proxy"]
+    command: ["--host", "http://toxiproxy:8474", "toxic", "add", "-t", "latency", "-a", "latency=2000", "-a", "jitter=500", "inventory-proxy"]
 
   seed-shipping:
     <<: *toxiproxy
     depends_on: { toxiproxy: { condition: service_healthy } }
-    command: ["--host", "http://localhost:8474", "create", "-l", "0.0.0.0:8503", "-u", "localhost:8083", "shipping-proxy"]
+    command: ["--host", "http://toxiproxy:8474", "create", "-l", "0.0.0.0:8503", "-u", "downstream:8083", "shipping-proxy"]
   seed-shipping-toxic:
     <<: *toxiproxy
     depends_on: { seed-shipping: { condition: service_completed_successfully } }
-    command: ["--host", "http://localhost:8474", "toxic", "add", "-t", "latency", "-a", "latency=3500", "-a", "jitter=1000", "shipping-proxy"]
+    command: ["--host", "http://toxiproxy:8474", "toxic", "add", "-t", "latency", "-a", "latency=3500", "-a", "jitter=1000", "shipping-proxy"]
 
   seed-notification:
     <<: *toxiproxy
     depends_on: { toxiproxy: { condition: service_healthy } }
-    command: ["--host", "http://localhost:8474", "create", "-l", "0.0.0.0:8504", "-u", "localhost:8084", "notification-proxy"]
+    command: ["--host", "http://toxiproxy:8474", "create", "-l", "0.0.0.0:8504", "-u", "downstream:8084", "notification-proxy"]
   seed-notification-toxic:
     <<: *toxiproxy
     depends_on: { seed-notification: { condition: service_completed_successfully } }
-    command: ["--host", "http://localhost:8474", "toxic", "add", "-t", "latency", "-a", "latency=1000", "-a", "jitter=100", "notification-proxy"]
+    command: ["--host", "http://toxiproxy:8474", "toxic", "add", "-t", "latency", "-a", "latency=1000", "-a", "jitter=100", "notification-proxy"]
 
   toxihub:
     image: ghcr.io/henryken/toxihub:latest
-    network_mode: service:app
     environment:
-      - TOXIPROXY_HOST=localhost
+      - TOXIPROXY_HOST=toxiproxy
+    ports:
+      - "7072:7072"
     depends_on: [toxiproxy]
