@@ -42,8 +42,10 @@ docker-compose.override.yml
 *.pid
 
 ### JetBrains IDEs (IntelliJ IDEA / WebStorm) ###
-.idea/
-*.iml
+.idea/*
+!.idea/modules.xml
+!.idea/gradle.xml
+!.idea/*.iml
 *.ipr
 *.iws
 out/
