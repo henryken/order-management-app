@@ -1,0 +1,75 @@
+# Dev container stack. The sidecars share the "app" container's network namespace
+# (network_mode: service:app), so everything is reachable on localhost exactly as in
+# the README (Temporal on 7233, Toxiproxy on 8501-8504, downstream services on 8081-8084)
+# and no application config needs to change.
+
+x-toxiproxy: &toxiproxy
+  image: ghcr.io/shopify/toxiproxy:2.12.0
+  network_mode: service:app
+  entrypoint: ["/toxiproxy-cli"]
+
+services:
+  app:
+    image: mcr.microsoft.com/devcontainers/base:ubuntu
+    command: sleep infinity
+    volumes:
+      - ..:/workspaces:cached
+
+  temporal:
+    image: temporalio/temporal:1.8.3
+    network_mode: service:app
+    command: ["server", "start-dev", "--ip", "0.0.0.0", "--ui-ip", "0.0.0.0"]
+
+  toxiproxy:
+    image: ghcr.io/shopify/toxiproxy:2.12.0
+    network_mode: service:app
+    healthcheck:
+      test: ["CMD", "/toxiproxy-cli", "--host", "http://localhost:8474", "list"]
+      interval: 2s
+      timeout: 2s
+      retries: 15
+
+  # One-shot seeders (the toxiproxy image has no shell). Upstreams are localhost since
+  # the downstream services run inside the dev container.
+  seed-payment:
+    <<: *toxiproxy
+    depends_on: { toxiproxy: { condition: service_healthy } }
+    command: ["--host", "http://localhost:8474", "create", "-l", "0.0.0.0:8501", "-u", "localhost:8081", "payment-proxy"]
+  seed-payment-toxic:
+    <<: *toxiproxy
+    depends_on: { seed-payment: { condition: service_completed_successfully } }
+    command: ["--host", "http://localhost:8474", "toxic", "add", "-t", "latency", "-a", "latency=3000", "-a", "jitter=1000", "payment-proxy"]
+
+  seed-inventory:
+    <<: *toxiproxy
+    depends_on: { toxiproxy: { condition: service_healthy } }
+    command: ["--host", "http://localhost:8474", "create", "-l", "0.0.0.0:8502", "-u", "localhost:8082", "inventory-proxy"]
+  seed-inventory-toxic:
+    <<: *toxiproxy
+    depends_on: { seed-inventory: { condition: service_completed_successfully } }
+    command: ["--host", "http://localhost:8474", "toxic", "add", "-t", "latency", "-a", "latency=2000", "-a", "jitter=500", "inventory-proxy"]
+
+  seed-shipping:
+    <<: *toxiproxy
+    depends_on: { toxiproxy: { condition: service_healthy } }
+    command: ["--host", "http://localhost:8474", "create", "-l", "0.0.0.0:8503", "-u", "localhost:8083", "shipping-proxy"]
+  seed-shipping-toxic:
+    <<: *toxiproxy
+    depends_on: { seed-shipping: { condition: service_completed_successfully } }
+    command: ["--host", "http://localhost:8474", "toxic", "add", "-t", "latency", "-a", "latency=3500", "-a", "jitter=1000", "shipping-proxy"]
+
+  seed-notification:
+    <<: *toxiproxy
+    depends_on: { toxiproxy: { condition: service_healthy } }
+    command: ["--host", "http://localhost:8474", "create", "-l", "0.0.0.0:8504", "-u", "localhost:8084", "notification-proxy"]
+  seed-notification-toxic:
+    <<: *toxiproxy
+    depends_on: { seed-notification: { condition: service_completed_successfully } }
+    command: ["--host", "http://localhost:8474", "toxic", "add", "-t", "latency", "-a", "latency=1000", "-a", "jitter=100", "notification-proxy"]
+
+  toxihub:
+    image: ghcr.io/henryken/toxihub:latest
+    network_mode: service:app
+    environment:
+      - TOXIPROXY_HOST=localhost
+    depends_on: [toxiproxy]
