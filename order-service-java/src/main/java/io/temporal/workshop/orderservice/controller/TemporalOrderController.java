@@ -54,7 +54,7 @@ public class TemporalOrderController {
       @RequestParam(defaultValue = "manager@example.com") String approverEmail) {
 
     OrderWorkflow workflow = workflowClient.newWorkflowStub(OrderWorkflow.class, "order-" + orderId);
-//    workflow.approveDispatch(approverEmail);
+    workflow.approveDispatch(approverEmail);
 
     return ResponseEntity.ok(Map.of("message", "Approval signal sent"));
   }
