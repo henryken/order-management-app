@@ -1,5 +1,6 @@
 import { defineSearchAttributeKey, SearchAttributeType } from '@temporalio/common';
 import {
+  ActivityFailure,
   condition,
   defineQuery,
   defineSignal,
@@ -64,49 +65,63 @@ export async function OrderWorkflow(order: OrderRequest): Promise<OrderResult> {
     return OrderResults.cancelled(order.orderId, cancellationReason);
   };
 
-  // Payment
-  setStatus('PAYMENT_PROCESSING');
-  await activities.ChargePayment(order.orderId, order.amount);
-  saga.addCompensation(() => activities.RefundPayment(order.orderId, order.amount));
+  try {
+    // Payment
+    setStatus('PAYMENT_PROCESSING');
+    await activities.ChargePayment(order.orderId, order.amount);
+    saga.addCompensation(() => activities.RefundPayment(order.orderId, order.amount));
 
-  // Inventory
-  setStatus('RESERVING_INVENTORY');
-  await activities.ReserveInventory(order.item, order.quantity);
-  saga.addCompensation(() => activities.ReleaseInventory(order.item, order.quantity));
+    // Inventory
+    setStatus('RESERVING_INVENTORY');
+    await activities.ReserveInventory(order.item, order.quantity);
+    saga.addCompensation(() => activities.ReleaseInventory(order.item, order.quantity));
 
-  // Grace Period for cancellation
-  setStatus('AWAITING_GRACE_PERIOD');
-  const cancelledDuringGrace = await condition(() => isCancelled, GRACE_PERIOD);
+    // Grace Period for cancellation
+    setStatus('AWAITING_GRACE_PERIOD');
+    const cancelledDuringGrace = await condition(() => isCancelled, GRACE_PERIOD);
 
-  if (cancelledDuringGrace) {
-    return handleCancellation();
+    if (cancelledDuringGrace) {
+      return await handleCancellation();
+    }
+
+    // Human in the Loop: Awaiting Dispatch Approval
+    setStatus('AWAITING_APPROVAL');
+    await activities.SendNotification(order.orderId, 'APPROVAL_REQUIRED', 'Order awaiting manual dispatch approval.');
+
+    // Waits durably without consuming threads or resources until approved (or cancelled)
+    // The current details are shown in the Web UI while the workflow waits.
+    setCurrentDetails(
+      `**Awaiting dispatch approval** for order \`${order.orderId}\`.\n\n` +
+        'Send the `approveDispatch` signal to continue, or `cancelOrder` to cancel.',
+    );
+    await condition(() => isApproved || isCancelled);
+    setCurrentDetails('');
+
+    if (isCancelled) {
+      return await handleCancellation();
+    }
+
+    // Dispatch
+    setStatus('DISPATCHING');
+    await activities.DispatchShipping(order.orderId, order.address);
+
+    // Notification
+    await activities.SendNotification(order.orderId, 'DISPATCHED', 'Dispatched!');
+
+    setStatus('COMPLETED');
+
+    return OrderResults.success(order.orderId);
+  } catch (err) {
+    if (!(err instanceof ActivityFailure)) {
+      throw err;
+    }
+
+    setStatus('FAILED');
+    await saga.compensate();
+
+    // The message of the failure that caused the activity to fail
+    await activities.SendNotification(order.orderId, 'FAILED', `Order failed: ${err.cause?.message ?? err.message}`);
+
+    throw err;
   }
-
-  // Human in the Loop: Awaiting Dispatch Approval
-  setStatus('AWAITING_APPROVAL');
-  await activities.SendNotification(order.orderId, 'APPROVAL_REQUIRED', 'Order awaiting manual dispatch approval.');
-
-  // Waits durably without consuming threads or resources until approved (or cancelled)
-  // The current details are shown in the Web UI while the workflow waits.
-  setCurrentDetails(
-    `**Awaiting dispatch approval** for order \`${order.orderId}\`.\n\n` +
-      'Send the `approveDispatch` signal to continue, or `cancelOrder` to cancel.',
-  );
-  await condition(() => isApproved || isCancelled);
-  setCurrentDetails('');
-
-  if (isCancelled) {
-    return handleCancellation();
-  }
-
-  // Dispatch
-  setStatus('DISPATCHING');
-  await activities.DispatchShipping(order.orderId, order.address);
-
-  // Notification
-  await activities.SendNotification(order.orderId, 'DISPATCHED', 'Dispatched!');
-
-  setStatus('COMPLETED');
-
-  return OrderResults.success(order.orderId);
 }

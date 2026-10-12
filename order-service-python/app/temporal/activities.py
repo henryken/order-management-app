@@ -1,6 +1,7 @@
 from temporalio import activity
+from temporalio.exceptions import ApplicationError
 
-from app.infra import DownstreamServices
+from app.infra import DownstreamServices, OutOfStockError
 
 
 class OrderActivities:
@@ -15,7 +16,10 @@ class OrderActivities:
 
     @activity.defn(name="ReserveInventory")
     def reserve_inventory(self, item: str, quantity: int) -> None:
-        self._services.reserve_inventory(item, quantity)
+        try:
+            self._services.reserve_inventory(item, quantity)
+        except OutOfStockError as ex:
+            raise ApplicationError(str(ex), type="ITEM_OUT_OF_STOCK", non_retryable=True) from ex
 
     @activity.defn(name="DispatchShipping")
     def dispatch_shipping(self, order_id: str, address: str) -> None:

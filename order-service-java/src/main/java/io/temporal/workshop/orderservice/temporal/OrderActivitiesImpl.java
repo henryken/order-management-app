@@ -1,5 +1,6 @@
 package io.temporal.workshop.orderservice.temporal;
 
+import io.temporal.failure.ApplicationFailure;
 import io.temporal.spring.boot.ActivityImpl;
 import io.temporal.workshop.orderservice.infra.InventoryService;
 import io.temporal.workshop.orderservice.infra.NotificationService;
@@ -35,7 +36,11 @@ public class OrderActivitiesImpl implements OrderActivities {
 
   @Override
   public void reserveInventory(String item, int quantity) {
-    inventoryService.reserve(item, quantity);
+    try {
+      inventoryService.reserve(item, quantity);
+    } catch (IllegalArgumentException e) {
+      throw ApplicationFailure.newNonRetryableFailure(e.getMessage(), "ITEM_OUT_OF_STOCK");
+    }
   }
 
   @Override

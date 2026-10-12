@@ -1,5 +1,6 @@
 using OrderService.Infra;
 using Temporalio.Activities;
+using Temporalio.Exceptions;
 
 namespace OrderService.Temporal;
 
@@ -13,7 +14,17 @@ public sealed class OrderActivities(DownstreamServices services)
     public Task ChargePaymentAsync(string orderId, decimal amount) => services.ChargePaymentAsync(orderId, amount);
 
     [Activity]
-    public Task ReserveInventoryAsync(string item, int quantity) => services.ReserveInventoryAsync(item, quantity);
+    public async Task ReserveInventoryAsync(string item, int quantity)
+    {
+        try
+        {
+            await services.ReserveInventoryAsync(item, quantity);
+        }
+        catch (OutOfStockException e)
+        {
+            throw new ApplicationFailureException(e.Message, errorType: "ITEM_OUT_OF_STOCK", nonRetryable: true);
+        }
+    }
 
     [Activity]
     public Task RefundPaymentAsync(string orderId, decimal amount) => services.RefundPaymentAsync(orderId, amount);
