@@ -22,6 +22,9 @@ public class OrderWorkflowImpl implements OrderWorkflow {
   private boolean isApproved = false;
   private String approverEmail;
 
+  private boolean isCancelled = false;
+  private String cancellationReason = "";
+
   private final ActivityOptions options = ActivityOptions.newBuilder()
       .setStartToCloseTimeout(Duration.ofSeconds(5))
       .build();
@@ -42,23 +45,40 @@ public class OrderWorkflowImpl implements OrderWorkflow {
     setStatus(OrderStatus.RESERVING_INVENTORY);
     activities.reserveInventory(order.item(), order.quantity());
 
-    // Human in the Loop: Awaiting Dispatch Approval
-    setStatus(OrderStatus.AWAITING_APPROVAL);
-    activities.sendNotification(order.orderId(), "APPROVAL_REQUIRED", "Order awaiting manual dispatch approval.");
+    // Grace Period for cancellation
+    setStatus(OrderStatus.AWAITING_GRACE_PERIOD);
+    boolean cancelledDuringGrace = Workflow.await(Duration.ofSeconds(20), () -> this.isCancelled);
 
-    // Waits durably without consuming threads or resources until approved
-    Workflow.await(() -> this.isApproved);
+    if (!cancelledDuringGrace) {
+      // Human in the Loop: Awaiting Dispatch Approval
+      setStatus(OrderStatus.AWAITING_APPROVAL);
+      activities.sendNotification(order.orderId(), "APPROVAL_REQUIRED",
+          "Order awaiting manual dispatch approval.");
 
-    // Dispatch
-    setStatus(OrderStatus.DISPATCHING);
-    activities.dispatchShipping(order.orderId(), order.address());
+      // Waits durably without consuming threads or resources until approved
+      // The current details are shown in the Web UI while the workflow waits.
+      Workflow.setCurrentDetails("**Awaiting dispatch approval** for order `" + order.orderId()
+          + "`.\n\nSend the `approveDispatch` signal to continue, or `cancelOrder` to cancel.");
+      Workflow.await(() -> this.isApproved);
+      Workflow.setCurrentDetails("");
 
-    // Notification
-    activities.sendNotification(order.orderId(), "DISPATCHED", "Dispatched!");
+      // Dispatch
+      setStatus(OrderStatus.DISPATCHING);
+      activities.dispatchShipping(order.orderId(), order.address());
 
-    setStatus(OrderStatus.COMPLETED);
+      // Notification
+      activities.sendNotification(order.orderId(), "DISPATCHED", "Dispatched!");
 
-    return OrderResult.success(order.orderId());
+      setStatus(OrderStatus.COMPLETED);
+
+      return OrderResult.success(order.orderId());
+    }
+
+    setStatus(OrderStatus.CANCELLED);
+    activities.sendNotification(order.orderId(), "CANCELLED",
+        "Cancelled: " + this.cancellationReason);
+
+    return OrderResult.cancelled(order.orderId(), this.cancellationReason);
   }
 
   private void setStatus(OrderStatus newStatus) {
@@ -74,6 +94,12 @@ public class OrderWorkflowImpl implements OrderWorkflow {
   public void approveDispatch(String approverEmail) {
     this.isApproved = true;
     this.approverEmail = approverEmail;
+  }
+
+  @Override
+  public void cancelOrder(String reason) {
+    this.isCancelled = true;
+    this.cancellationReason = reason;
   }
 
 }

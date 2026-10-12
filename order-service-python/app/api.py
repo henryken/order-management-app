@@ -43,3 +43,14 @@ async def approve_order(
     handle = _client(request).get_workflow_handle(_workflow_id(order_id))
     await handle.signal(OrderWorkflow.approve_dispatch, approver_email)
     return {"message": "Approval signal sent"}
+
+
+@router.post("/{order_id}/cancel")
+async def cancel_order(
+    order_id: str,
+    request: Request,
+    reason: str = "Customer changed mind",
+) -> dict[str, str]:
+    handle = _client(request).get_workflow_handle(_workflow_id(order_id))
+    await handle.signal(OrderWorkflow.cancel_order, reason)
+    return {"message": "Cancellation signal sent"}
