@@ -3,6 +3,7 @@ from datetime import timedelta
 
 from temporalio import workflow
 from temporalio.common import SearchAttributeKey
+from temporalio.exceptions import ActivityError
 
 with workflow.unsafe.imports_passed_through():
     from app.models import OrderRequest, OrderResult, OrderStatus
@@ -34,66 +35,84 @@ class OrderWorkflow:
 
         saga = Saga()
 
-        # Payment
-        self._set_status(OrderStatus.PAYMENT_PROCESSING)
-        await workflow.execute_activity("ChargePayment", args=[order.order_id, order.amount], **ACTIVITY_OPTIONS)
-        saga.add_compensation(
-            lambda: workflow.execute_activity(
-                "RefundPayment", args=[order.order_id, order.amount], **ACTIVITY_OPTIONS
-            )
-        )
-
-        # Inventory
-        self._set_status(OrderStatus.RESERVING_INVENTORY)
-        await workflow.execute_activity("ReserveInventory", args=[order.item, order.quantity], **ACTIVITY_OPTIONS)
-        saga.add_compensation(
-            lambda: workflow.execute_activity(
-                "ReleaseInventory", args=[order.item, order.quantity], **ACTIVITY_OPTIONS
-            )
-        )
-
-        # Grace Period for cancellation
-        self._set_status(OrderStatus.AWAITING_GRACE_PERIOD)
         try:
-            await workflow.wait_condition(lambda: self._cancelled, timeout=GRACE_PERIOD)
-        except asyncio.TimeoutError:
-            pass
+            # Payment
+            self._set_status(OrderStatus.PAYMENT_PROCESSING)
+            await workflow.execute_activity(
+                "ChargePayment", args=[order.order_id, order.amount], **ACTIVITY_OPTIONS
+            )
+            saga.add_compensation(
+                lambda: workflow.execute_activity(
+                    "RefundPayment", args=[order.order_id, order.amount], **ACTIVITY_OPTIONS
+                )
+            )
 
-        if self._cancelled:
-            return await self._handle_cancellation(order, saga)
+            # Inventory
+            self._set_status(OrderStatus.RESERVING_INVENTORY)
+            await workflow.execute_activity(
+                "ReserveInventory", args=[order.item, order.quantity], **ACTIVITY_OPTIONS
+            )
+            saga.add_compensation(
+                lambda: workflow.execute_activity(
+                    "ReleaseInventory", args=[order.item, order.quantity], **ACTIVITY_OPTIONS
+                )
+            )
 
-        # Human in the Loop: Awaiting Dispatch Approval
-        self._set_status(OrderStatus.AWAITING_APPROVAL)
-        await workflow.execute_activity(
-            "SendNotification",
-            args=[order.order_id, "APPROVAL_REQUIRED", "Order awaiting manual dispatch approval."],
-            **ACTIVITY_OPTIONS,
-        )
+            # Grace Period for cancellation
+            self._set_status(OrderStatus.AWAITING_GRACE_PERIOD)
+            try:
+                await workflow.wait_condition(lambda: self._cancelled, timeout=GRACE_PERIOD)
+            except asyncio.TimeoutError:
+                pass
 
-        # Waits durably without consuming threads or resources until approved (or cancelled)
-        # The current details are shown in the Web UI while the workflow waits.
-        workflow.set_current_details(
-            f"**Awaiting dispatch approval** for order `{order.order_id}`.\n\n"
-            "Send the `approveDispatch` signal to continue, or `cancelOrder` to cancel."
-        )
-        await workflow.wait_condition(lambda: self._approved or self._cancelled)
-        workflow.set_current_details("")
+            if self._cancelled:
+                return await self._handle_cancellation(order, saga)
 
-        if self._cancelled:
-            return await self._handle_cancellation(order, saga)
+            # Human in the Loop: Awaiting Dispatch Approval
+            self._set_status(OrderStatus.AWAITING_APPROVAL)
+            await workflow.execute_activity(
+                "SendNotification",
+                args=[order.order_id, "APPROVAL_REQUIRED", "Order awaiting manual dispatch approval."],
+                **ACTIVITY_OPTIONS,
+            )
 
-        # Dispatch
-        self._set_status(OrderStatus.DISPATCHING)
-        await workflow.execute_activity("DispatchShipping", args=[order.order_id, order.address], **ACTIVITY_OPTIONS)
+            # Waits durably without consuming threads or resources until approved (or cancelled)
+            # The current details are shown in the Web UI while the workflow waits.
+            workflow.set_current_details(
+                f"**Awaiting dispatch approval** for order `{order.order_id}`.\n\n"
+                "Send the `approveDispatch` signal to continue, or `cancelOrder` to cancel."
+            )
+            await workflow.wait_condition(lambda: self._approved or self._cancelled)
+            workflow.set_current_details("")
 
-        # Notification
-        await workflow.execute_activity(
-            "SendNotification", args=[order.order_id, "DISPATCHED", "Dispatched!"], **ACTIVITY_OPTIONS
-        )
+            if self._cancelled:
+                return await self._handle_cancellation(order, saga)
 
-        self._set_status(OrderStatus.COMPLETED)
+            # Dispatch
+            self._set_status(OrderStatus.DISPATCHING)
+            await workflow.execute_activity(
+                "DispatchShipping", args=[order.order_id, order.address], **ACTIVITY_OPTIONS
+            )
 
-        return OrderResult.success(order.order_id)
+            # Notification
+            await workflow.execute_activity(
+                "SendNotification", args=[order.order_id, "DISPATCHED", "Dispatched!"], **ACTIVITY_OPTIONS
+            )
+
+            self._set_status(OrderStatus.COMPLETED)
+
+            return OrderResult.success(order.order_id)
+        except ActivityError as ex:
+            self._set_status(OrderStatus.FAILED)
+            await saga.compensate()
+
+            await workflow.execute_activity(
+                "SendNotification",
+                args=[order.order_id, "FAILED", f"Order failed: {_failure_message(ex)}"],
+                **ACTIVITY_OPTIONS,
+            )
+
+            raise
 
     async def _handle_cancellation(self, order: OrderRequest, saga: Saga) -> OrderResult:
         self._set_status(OrderStatus.CANCELLING)
@@ -125,3 +144,8 @@ class OrderWorkflow:
     def cancel_order(self, reason: str = "") -> None:
         self._cancelled = True
         self._cancellation_reason = reason
+
+
+def _failure_message(ex: ActivityError) -> str:
+    """The message of the failure that caused the activity to fail."""
+    return ex.cause.message if ex.cause is not None else str(ex)

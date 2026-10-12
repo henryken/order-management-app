@@ -2,6 +2,9 @@ package temporal
 
 import (
 	"context"
+	"errors"
+
+	"go.temporal.io/sdk/temporal"
 
 	"github.com/temporalio/order-management-app/order-service-go/internal/infra"
 )
@@ -18,7 +21,11 @@ func (a *Activities) ChargePayment(ctx context.Context, orderID string, amount f
 }
 
 func (a *Activities) ReserveInventory(ctx context.Context, item string, quantity int) error {
-	return a.Services.ReserveInventory(ctx, item, quantity)
+	err := a.Services.ReserveInventory(ctx, item, quantity)
+	if errors.Is(err, infra.ErrOutOfStock) {
+		return temporal.NewNonRetryableApplicationError(err.Error(), "ITEM_OUT_OF_STOCK", err)
+	}
+	return err
 }
 
 func (a *Activities) DispatchShipping(ctx context.Context, orderID, address string) error {
