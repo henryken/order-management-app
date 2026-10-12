@@ -2,6 +2,7 @@ package io.temporal.workshop.orderservice.temporal;
 
 import io.temporal.activity.ActivityOptions;
 import io.temporal.common.SearchAttributeKey;
+import io.temporal.failure.ActivityFailure;
 import io.temporal.spring.boot.WorkflowImpl;
 import io.temporal.workflow.Saga;
 import io.temporal.workflow.Workflow;
@@ -39,50 +40,59 @@ public class OrderWorkflowImpl implements OrderWorkflow {
 
     Saga saga = new Saga(new Saga.Options.Builder().setParallelCompensation(false).build());
 
-    // Payment
-    setStatus(OrderStatus.PAYMENT_PROCESSING);
-    activities.chargePayment(order.orderId(), order.amount());
-    saga.addCompensation(() -> activities.refundPayment(order.orderId(), order.amount()));
+    try {
+      // Payment
+      setStatus(OrderStatus.PAYMENT_PROCESSING);
+      activities.chargePayment(order.orderId(), order.amount());
+      saga.addCompensation(() -> activities.refundPayment(order.orderId(), order.amount()));
 
-    // Inventory
-    setStatus(OrderStatus.RESERVING_INVENTORY);
-    activities.reserveInventory(order.item(), order.quantity());
-    saga.addCompensation(() -> activities.releaseInventory(order.item(), order.quantity()));
+      // Inventory
+      setStatus(OrderStatus.RESERVING_INVENTORY);
+      activities.reserveInventory(order.item(), order.quantity());
+      saga.addCompensation(() -> activities.releaseInventory(order.item(), order.quantity()));
 
-    // Grace Period for cancellation
-    setStatus(OrderStatus.AWAITING_GRACE_PERIOD);
-    boolean cancelledDuringGrace = Workflow.await(Duration.ofSeconds(20), () -> this.isCancelled);
+      // Grace Period for cancellation
+      setStatus(OrderStatus.AWAITING_GRACE_PERIOD);
+      boolean cancelledDuringGrace = Workflow.await(Duration.ofSeconds(20), () -> this.isCancelled);
 
-    if (cancelledDuringGrace) {
-      return handleCancellation(order, saga);
+      if (cancelledDuringGrace) {
+        return handleCancellation(order, saga);
+      }
+
+      // Human in the Loop: Awaiting Dispatch Approval
+      setStatus(OrderStatus.AWAITING_APPROVAL);
+      activities.sendNotification(order.orderId(), "APPROVAL_REQUIRED",
+          "Order awaiting manual dispatch approval.");
+
+      // Waits durably without consuming threads or resources until approved
+      // The current details are shown in the Web UI while the workflow waits.
+      Workflow.setCurrentDetails("**Awaiting dispatch approval** for order `" + order.orderId()
+          + "`.\n\nSend the `approveDispatch` signal to continue, or `cancelOrder` to cancel.");
+      Workflow.await(() -> this.isApproved || this.isCancelled);
+      Workflow.setCurrentDetails("");
+
+      if (this.isCancelled) {
+        return handleCancellation(order, saga);
+      }
+
+      // Dispatch
+      setStatus(OrderStatus.DISPATCHING);
+      activities.dispatchShipping(order.orderId(), order.address());
+
+      // Notification
+      activities.sendNotification(order.orderId(), "DISPATCHED", "Dispatched!");
+
+      setStatus(OrderStatus.COMPLETED);
+
+      return OrderResult.success(order.orderId());
+    } catch (ActivityFailure e) {
+      setStatus(OrderStatus.FAILED);
+      saga.compensate();
+
+      activities.sendNotification(order.orderId(), "FAILED", "Order failed: " + e.getMessage());
+
+      throw e;
     }
-
-    // Human in the Loop: Awaiting Dispatch Approval
-    setStatus(OrderStatus.AWAITING_APPROVAL);
-    activities.sendNotification(order.orderId(), "APPROVAL_REQUIRED",
-        "Order awaiting manual dispatch approval.");
-
-    // Waits durably without consuming threads or resources until approved
-    // The current details are shown in the Web UI while the workflow waits.
-    Workflow.setCurrentDetails("**Awaiting dispatch approval** for order `" + order.orderId()
-        + "`.\n\nSend the `approveDispatch` signal to continue, or `cancelOrder` to cancel.");
-    Workflow.await(() -> this.isApproved || this.isCancelled);
-    Workflow.setCurrentDetails("");
-
-    if (this.isCancelled) {
-      return handleCancellation(order, saga);
-    }
-
-    // Dispatch
-    setStatus(OrderStatus.DISPATCHING);
-    activities.dispatchShipping(order.orderId(), order.address());
-
-    // Notification
-    activities.sendNotification(order.orderId(), "DISPATCHED", "Dispatched!");
-
-    setStatus(OrderStatus.COMPLETED);
-
-    return OrderResult.success(order.orderId());
   }
 
   private OrderResult handleCancellation(OrderRequest order, Saga saga) {
