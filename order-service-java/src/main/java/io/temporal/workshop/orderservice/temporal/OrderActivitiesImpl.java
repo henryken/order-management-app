@@ -29,8 +29,18 @@ public class OrderActivitiesImpl implements OrderActivities {
   }
 
   @Override
+  public void refundPayment(String orderId, double amount) {
+    paymentService.refund(orderId, amount);
+  }
+
+  @Override
   public void reserveInventory(String item, int quantity) {
     inventoryService.reserve(item, quantity);
+  }
+
+  @Override
+  public void releaseInventory(String item, int quantity) {
+    inventoryService.release(item, quantity);
   }
 
   @Override

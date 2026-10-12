@@ -41,6 +41,8 @@ async def lifespan(app: FastAPI):
                 activities.reserve_inventory,
                 activities.dispatch_shipping,
                 activities.send_notification,
+                activities.refund_payment,
+                activities.release_inventory,
             ],
             activity_executor=activity_executor,
         )

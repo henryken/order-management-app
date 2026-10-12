@@ -17,6 +17,14 @@ export const createActivities = (services: DownstreamServices) => ({
     await services.dispatchShipping(orderId, address);
   },
 
+  async RefundPayment(orderId: string, amount: number): Promise<void> {
+    await services.refundPayment(orderId, amount);
+  },
+
+  async ReleaseInventory(item: string, quantity: number): Promise<void> {
+    await services.releaseInventory(item, quantity);
+  },
+
   async SendNotification(orderId: string, type: string, message: string): Promise<void> {
     await services.sendNotification(orderId, type, message);
   },
