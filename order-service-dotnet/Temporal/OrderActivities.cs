@@ -16,6 +16,12 @@ public sealed class OrderActivities(DownstreamServices services)
     public Task ReserveInventoryAsync(string item, int quantity) => services.ReserveInventoryAsync(item, quantity);
 
     [Activity]
+    public Task RefundPaymentAsync(string orderId, decimal amount) => services.RefundPaymentAsync(orderId, amount);
+
+    [Activity]
+    public Task ReleaseInventoryAsync(string item, int quantity) => services.ReleaseInventoryAsync(item, quantity);
+
+    [Activity]
     public Task DispatchShippingAsync(string orderId, string address) => services.DispatchShippingAsync(orderId, address);
 
     [Activity]

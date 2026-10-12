@@ -28,3 +28,11 @@ func (a *Activities) DispatchShipping(ctx context.Context, orderID, address stri
 func (a *Activities) SendNotification(ctx context.Context, orderID, notificationType, message string) error {
 	return a.Services.SendNotification(ctx, orderID, notificationType, message)
 }
+
+func (a *Activities) RefundPayment(ctx context.Context, orderID string, amount float64) error {
+	return a.Services.RefundPayment(ctx, orderID, amount)
+}
+
+func (a *Activities) ReleaseInventory(ctx context.Context, item string, quantity int) error {
+	return a.Services.ReleaseInventory(ctx, item, quantity)
+}

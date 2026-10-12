@@ -14,6 +14,8 @@ public sealed class OrderWorker(ITemporalClient client, OrderActivities activiti
                 .AddActivity(activities.ChargePaymentAsync)
                 .AddActivity(activities.ReserveInventoryAsync)
                 .AddActivity(activities.DispatchShippingAsync)
+                .AddActivity(activities.RefundPaymentAsync)
+                .AddActivity(activities.ReleaseInventoryAsync)
                 .AddActivity(activities.SendNotificationAsync)
                 .AddWorkflow<OrderWorkflow>());
 
