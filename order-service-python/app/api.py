@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Query, Request
 from temporalio.client import Client
 
 from app.models import OrderRequest, OrderStatus
@@ -32,3 +32,14 @@ async def get_order_status(order_id: str, request: Request) -> dict[str, str]:
     handle = _client(request).get_workflow_handle(_workflow_id(order_id))
     status = await handle.query(OrderWorkflow.get_status, result_type=OrderStatus)
     return {"orderId": order_id, "status": status.value}
+
+
+@router.post("/{order_id}/approve")
+async def approve_order(
+    order_id: str,
+    request: Request,
+    approver_email: str = Query("manager@example.com", alias="approverEmail"),
+) -> dict[str, str]:
+    handle = _client(request).get_workflow_handle(_workflow_id(order_id))
+    await handle.signal(OrderWorkflow.approve_dispatch, approver_email)
+    return {"message": "Approval signal sent"}

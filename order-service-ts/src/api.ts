@@ -4,7 +4,7 @@ import type { OrderRequest, OrderStatus } from './models';
 import { ORDER_SERVICE } from './temporal/taskQueues';
 import { createNaiveOrder, downstreamErrorHandler } from './naive';
 import type { DownstreamServices } from './infra/downstream';
-import { OrderWorkflow, getStatusQuery } from './temporal/workflows';
+import { OrderWorkflow, approveDispatchSignal, getStatusQuery } from './temporal/workflows';
 
 const workflowId = (orderId: string) => `order-${orderId}`;
 
@@ -22,6 +22,13 @@ export function createApp(client: Client, services: DownstreamServices) {
       args: [order],
     });
     res.status(202).json({ workflowId: workflowId(order.orderId), status: 'STARTED' });
+  });
+
+  app.post('/temporal/orders/:orderId/approve', async (req, res) => {
+    const { orderId } = req.params;
+    const approverEmail = (req.query.approverEmail as string) || 'manager@example.com';
+    await client.workflow.getHandle(workflowId(orderId)).signal(approveDispatchSignal, approverEmail);
+    res.json({ message: 'Approval signal sent' });
   });
 
   app.get('/temporal/orders/:orderId/status', async (req, res) => {
