@@ -1,4 +1,5 @@
-import { DownstreamServices } from '../infra/downstream';
+import { ApplicationFailure } from '@temporalio/activity';
+import { DownstreamServices, OutOfStockError } from '../infra/downstream';
 
 /**
  * Activity names are the object keys, so they are PascalCase on purpose: they match the
@@ -10,7 +11,14 @@ export const createActivities = (services: DownstreamServices) => ({
   },
 
   async ReserveInventory(item: string, quantity: number): Promise<void> {
-    await services.reserveInventory(item, quantity);
+    try {
+      await services.reserveInventory(item, quantity);
+    } catch (err) {
+      if (err instanceof OutOfStockError) {
+        throw ApplicationFailure.nonRetryable(err.message, 'ITEM_OUT_OF_STOCK');
+      }
+      throw err;
+    }
   },
 
   async DispatchShipping(orderId: string, address: string): Promise<void> {

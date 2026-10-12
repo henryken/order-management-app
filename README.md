@@ -11,8 +11,9 @@ approval step before dispatch, and a cancellation grace period.
 - **order-service-go**, **order-service-python**, **order-service-ts** — the same order service
   (REST API plus worker) in Go, Python and TypeScript. They share the REST contract, the workflow
   and activity names, the `order-service` task queue and the JSON payloads, so they are
-  interchangeable: run **one** of them at a time on port `8080`. They currently implement the
-  naive endpoint and the basic workflow only (no signals or compensation yet).
+  interchangeable: run **one** of them at a time on port `8080`. They implement the same
+  features as the Java service: the naive endpoint, plus the Temporal workflow with human approval,
+  a cancellation grace period, and saga compensation.
 - **downstream-services** — a Node/Express app simulating the Payment (`8081`), Inventory (`8082`),
   Shipping (`8083`), and Notification (`8084`) services the workflow calls out to.
 - **docker/docker-compose.yml** — spins up:
