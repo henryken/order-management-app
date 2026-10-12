@@ -28,6 +28,7 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("POST /temporal/orders", h.createOrder)
 	mux.HandleFunc("GET /temporal/orders/{orderId}/status", h.getOrderStatus)
 	mux.HandleFunc("POST /temporal/orders/{orderId}/approve", h.approveOrder)
+	mux.HandleFunc("POST /temporal/orders/{orderId}/cancel", h.cancelOrder)
 	return mux
 }
 
@@ -95,4 +96,20 @@ func (h *Handler) approveOrder(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]string{"message": "Approval signal sent"})
+}
+
+func (h *Handler) cancelOrder(w http.ResponseWriter, r *http.Request) {
+	orderID := r.PathValue("orderId")
+	reason := r.URL.Query().Get("reason")
+	if reason == "" {
+		reason = "Customer changed mind"
+	}
+
+	if err := h.client.SignalWorkflow(r.Context(), workflowID(orderID), "", ordertemporal.SignalCancelOrder, reason); err != nil {
+		slog.Error("Failed to signal workflow", "orderId", orderID, "error", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"message": "Cancellation signal sent"})
 }

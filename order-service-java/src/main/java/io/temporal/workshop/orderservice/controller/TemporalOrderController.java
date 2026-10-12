@@ -43,7 +43,7 @@ public class TemporalOrderController {
       @RequestParam(defaultValue = "Customer changed mind") String reason) {
 
     OrderWorkflow workflow = workflowClient.newWorkflowStub(OrderWorkflow.class, "order-" + orderId);
-//    workflow.cancelOrder(reason);
+    workflow.cancelOrder(reason);
 
     return ResponseEntity.ok(Map.of("message", "Cancellation signal sent"));
   }
