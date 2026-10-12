@@ -9,15 +9,21 @@ import (
 	"github.com/temporalio/order-management-app/order-service-go/internal/model"
 )
 
-// SignalApproveDispatch is the signal name, matching the Java implementation.
-const SignalApproveDispatch = "approveDispatch"
+// Signal names match the Java implementation.
+const (
+	SignalApproveDispatch = "approveDispatch"
+	SignalCancelOrder     = "cancelOrder"
+)
+
+// GracePeriod is how long an order can still be cancelled before it goes for approval.
+const GracePeriod = 20 * time.Second
 
 // orderStatusKey is a custom search attribute, so orders can be listed and filtered by status in
 // the Web UI, e.g. OrderStatus = "AWAITING_APPROVAL". It must be registered on the Temporal namespace.
 var orderStatusKey = temporal.NewSearchAttributeKeyKeyword("OrderStatus")
 
 // OrderWorkflow is registered under the type name "OrderWorkflow" and answers the
-// "getStatus" query and the "approveDispatch" signal, matching the Java implementation.
+// "getStatus" query and the "approveDispatch" and "cancelOrder" signals, matching the Java implementation.
 func OrderWorkflow(ctx workflow.Context, order model.OrderRequest) (model.OrderResult, error) {
 	status := model.StatusPending
 	if err := workflow.SetQueryHandler(ctx, "getStatus", func() (model.OrderStatus, error) {
@@ -47,6 +53,18 @@ func OrderWorkflow(ctx workflow.Context, order model.OrderRequest) (model.OrderR
 		}
 	})
 
+	cancelled := false
+	cancellationReason := ""
+	cancelCh := workflow.GetSignalChannel(ctx, SignalCancelOrder)
+	workflow.Go(ctx, func(ctx workflow.Context) {
+		for {
+			var reason string
+			cancelCh.Receive(ctx, &reason)
+			cancelled = true
+			cancellationReason = reason
+		}
+	})
+
 	var activities *Activities // only used to reference the activity methods
 
 	// Payment
@@ -61,6 +79,20 @@ func OrderWorkflow(ctx workflow.Context, order model.OrderRequest) (model.OrderR
 		return model.OrderResult{}, err
 	}
 
+	// Grace Period for cancellation
+	setStatus(model.StatusAwaitingGracePeriod)
+	cancelledDuringGrace, err := workflow.AwaitWithTimeout(ctx, GracePeriod, func() bool { return cancelled })
+	if err != nil {
+		return model.OrderResult{}, err
+	}
+	if cancelledDuringGrace {
+		setStatus(model.StatusCancelled)
+		if err := workflow.ExecuteActivity(ctx, activities.SendNotification, order.OrderID, "CANCELLED", "Cancelled: "+cancellationReason).Get(ctx, nil); err != nil {
+			return model.OrderResult{}, err
+		}
+		return model.Cancelled(order.OrderID, cancellationReason), nil
+	}
+
 	// Human in the Loop: Awaiting Dispatch Approval
 	setStatus(model.StatusAwaitingApproval)
 	if err := workflow.ExecuteActivity(ctx, activities.SendNotification, order.OrderID, "APPROVAL_REQUIRED", "Order awaiting manual dispatch approval.").Get(ctx, nil); err != nil {
@@ -68,9 +100,13 @@ func OrderWorkflow(ctx workflow.Context, order model.OrderRequest) (model.OrderR
 	}
 
 	// Waits durably without consuming threads or resources until approved
+	// The current details are shown in the Web UI while the workflow waits.
+	workflow.SetCurrentDetails(ctx, "**Awaiting dispatch approval** for order `"+order.OrderID+
+		"`.\n\nSend the `approveDispatch` signal to continue, or `cancelOrder` to cancel.")
 	if err := workflow.Await(ctx, func() bool { return approved }); err != nil {
 		return model.OrderResult{}, err
 	}
+	workflow.SetCurrentDetails(ctx, "")
 
 	// Dispatch
 	setStatus(model.StatusDispatching)
