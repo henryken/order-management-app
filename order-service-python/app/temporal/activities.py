@@ -24,3 +24,11 @@ class OrderActivities:
     @activity.defn(name="SendNotification")
     def send_notification(self, order_id: str, type_: str, message: str) -> None:
         self._services.send_notification(order_id, type_, message)
+
+    @activity.defn(name="RefundPayment")
+    def refund_payment(self, order_id: str, amount: float) -> None:
+        self._services.refund_payment(order_id, amount)
+
+    @activity.defn(name="ReleaseInventory")
+    def release_inventory(self, item: str, quantity: int) -> None:
+        self._services.release_inventory(item, quantity)
