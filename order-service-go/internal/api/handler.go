@@ -27,6 +27,7 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("POST /orders", h.createNaiveOrder)
 	mux.HandleFunc("POST /temporal/orders", h.createOrder)
 	mux.HandleFunc("GET /temporal/orders/{orderId}/status", h.getOrderStatus)
+	mux.HandleFunc("POST /temporal/orders/{orderId}/approve", h.approveOrder)
 	return mux
 }
 
@@ -78,4 +79,20 @@ func writeJSON(w http.ResponseWriter, status int, body any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(body)
+}
+
+func (h *Handler) approveOrder(w http.ResponseWriter, r *http.Request) {
+	orderID := r.PathValue("orderId")
+	approverEmail := r.URL.Query().Get("approverEmail")
+	if approverEmail == "" {
+		approverEmail = "manager@example.com"
+	}
+
+	if err := h.client.SignalWorkflow(r.Context(), workflowID(orderID), "", ordertemporal.SignalApproveDispatch, approverEmail); err != nil {
+		slog.Error("Failed to signal workflow", "orderId", orderID, "error", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"message": "Approval signal sent"})
 }

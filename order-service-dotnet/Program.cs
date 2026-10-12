@@ -51,6 +51,13 @@ app.MapPost("/temporal/orders", async (OrderRequest order, ITemporalClient tempo
     return Results.Accepted(value: new { workflowId = WorkflowId(order.OrderId), status = "STARTED" });
 });
 
+app.MapPost("/temporal/orders/{orderId}/approve", async (string orderId, string? approverEmail, ITemporalClient temporal) =>
+{
+    await temporal.GetWorkflowHandle<OrderWorkflow>(WorkflowId(orderId))
+        .SignalAsync(wf => wf.ApproveDispatchAsync(approverEmail ?? "manager@example.com"));
+    return Results.Ok(new { message = "Approval signal sent" });
+});
+
 app.MapGet("/temporal/orders/{orderId}/status", async (string orderId, ITemporalClient temporal) =>
 {
     var status = await temporal.GetWorkflowHandle<OrderWorkflow>(WorkflowId(orderId))
