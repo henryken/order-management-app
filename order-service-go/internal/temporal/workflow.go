@@ -23,7 +23,8 @@ const GracePeriod = 20 * time.Second
 var orderStatusKey = temporal.NewSearchAttributeKeyKeyword("OrderStatus")
 
 // OrderWorkflow is registered under the type name "OrderWorkflow" and answers the
-// "getStatus" query and the "approveDispatch" and "cancelOrder" signals, matching the Java implementation.
+// "getStatus" query and the "approveDispatch" and "cancelOrder" signals, matching the Java
+// implementation.
 func OrderWorkflow(ctx workflow.Context, order model.OrderRequest) (model.OrderResult, error) {
 	status := model.StatusPending
 	if err := workflow.SetQueryHandler(ctx, "getStatus", func() (model.OrderStatus, error) {
@@ -66,18 +67,38 @@ func OrderWorkflow(ctx workflow.Context, order model.OrderRequest) (model.OrderR
 	})
 
 	var activities *Activities // only used to reference the activity methods
+	s := &saga{}
+
+	handleCancellation := func() (model.OrderResult, error) {
+		setStatus(model.StatusCancelling)
+		if err := s.compensate(ctx); err != nil {
+			return model.OrderResult{}, err
+		}
+		setStatus(model.StatusCancelled)
+
+		if err := workflow.ExecuteActivity(ctx, activities.SendNotification, order.OrderID, "CANCELLED", "Order cancelled: "+cancellationReason).Get(ctx, nil); err != nil {
+			return model.OrderResult{}, err
+		}
+		return model.Cancelled(order.OrderID, cancellationReason), nil
+	}
 
 	// Payment
 	setStatus(model.StatusPaymentProcessing)
 	if err := workflow.ExecuteActivity(ctx, activities.ChargePayment, order.OrderID, order.Amount).Get(ctx, nil); err != nil {
 		return model.OrderResult{}, err
 	}
+	s.addCompensation(func(ctx workflow.Context) error {
+		return workflow.ExecuteActivity(ctx, activities.RefundPayment, order.OrderID, order.Amount).Get(ctx, nil)
+	})
 
 	// Inventory
 	setStatus(model.StatusReservingInventory)
 	if err := workflow.ExecuteActivity(ctx, activities.ReserveInventory, order.Item, order.Quantity).Get(ctx, nil); err != nil {
 		return model.OrderResult{}, err
 	}
+	s.addCompensation(func(ctx workflow.Context) error {
+		return workflow.ExecuteActivity(ctx, activities.ReleaseInventory, order.Item, order.Quantity).Get(ctx, nil)
+	})
 
 	// Grace Period for cancellation
 	setStatus(model.StatusAwaitingGracePeriod)
@@ -86,11 +107,7 @@ func OrderWorkflow(ctx workflow.Context, order model.OrderRequest) (model.OrderR
 		return model.OrderResult{}, err
 	}
 	if cancelledDuringGrace {
-		setStatus(model.StatusCancelled)
-		if err := workflow.ExecuteActivity(ctx, activities.SendNotification, order.OrderID, "CANCELLED", "Cancelled: "+cancellationReason).Get(ctx, nil); err != nil {
-			return model.OrderResult{}, err
-		}
-		return model.Cancelled(order.OrderID, cancellationReason), nil
+		return handleCancellation()
 	}
 
 	// Human in the Loop: Awaiting Dispatch Approval
@@ -99,14 +116,17 @@ func OrderWorkflow(ctx workflow.Context, order model.OrderRequest) (model.OrderR
 		return model.OrderResult{}, err
 	}
 
-	// Waits durably without consuming threads or resources until approved
+	// Waits durably without consuming threads or resources until approved (or cancelled)
 	// The current details are shown in the Web UI while the workflow waits.
 	workflow.SetCurrentDetails(ctx, "**Awaiting dispatch approval** for order `"+order.OrderID+
 		"`.\n\nSend the `approveDispatch` signal to continue, or `cancelOrder` to cancel.")
-	if err := workflow.Await(ctx, func() bool { return approved }); err != nil {
+	if err := workflow.Await(ctx, func() bool { return approved || cancelled }); err != nil {
 		return model.OrderResult{}, err
 	}
 	workflow.SetCurrentDetails(ctx, "")
+	if cancelled {
+		return handleCancellation()
+	}
 
 	// Dispatch
 	setStatus(model.StatusDispatching)
