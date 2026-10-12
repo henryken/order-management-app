@@ -58,6 +58,13 @@ app.MapPost("/temporal/orders/{orderId}/approve", async (string orderId, string?
     return Results.Ok(new { message = "Approval signal sent" });
 });
 
+app.MapPost("/temporal/orders/{orderId}/cancel", async (string orderId, string? reason, ITemporalClient temporal) =>
+{
+    await temporal.GetWorkflowHandle<OrderWorkflow>(WorkflowId(orderId))
+        .SignalAsync(wf => wf.CancelOrderAsync(reason ?? "Customer changed mind"));
+    return Results.Ok(new { message = "Cancellation signal sent" });
+});
+
 app.MapGet("/temporal/orders/{orderId}/status", async (string orderId, ITemporalClient temporal) =>
 {
     var status = await temporal.GetWorkflowHandle<OrderWorkflow>(WorkflowId(orderId))

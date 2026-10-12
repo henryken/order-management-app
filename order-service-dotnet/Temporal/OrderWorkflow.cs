@@ -8,6 +8,9 @@ namespace OrderService.Temporal;
 [Workflow("OrderWorkflow")]
 public class OrderWorkflow
 {
+    // How long an order can still be cancelled before it goes for approval.
+    private static readonly TimeSpan GracePeriod = TimeSpan.FromSeconds(20);
+
     private static readonly ActivityOptions Options = new() { StartToCloseTimeout = TimeSpan.FromSeconds(5) };
 
     // Custom search attribute, so orders can be listed and filtered by status in the Web UI,
@@ -17,6 +20,8 @@ public class OrderWorkflow
     private OrderStatus status = OrderStatus.Pending;
     private bool isApproved;
     private string? approverEmail;
+    private bool isCancelled;
+    private string cancellationReason = "";
 
     [WorkflowQuery("getStatus")]
     public OrderStatus GetStatus() => status;
@@ -28,6 +33,16 @@ public class OrderWorkflow
         // still approves the order; otherwise the SDK silently drops it.
         isApproved = true;
         approverEmail = email ?? "manager@example.com";
+        return Task.CompletedTask;
+    }
+
+    [WorkflowSignal("cancelOrder")]
+    public Task CancelOrderAsync(string? reason = null)
+    {
+        // The reason is optional so a signal sent without input (e.g. from the Web UI or the CLI)
+        // still cancels the order; otherwise the SDK silently drops it.
+        isCancelled = true;
+        cancellationReason = reason ?? "Customer changed mind";
         return Task.CompletedTask;
     }
 
@@ -52,12 +67,28 @@ public class OrderWorkflow
         SetStatus(OrderStatus.ReservingInventory);
         await Workflow.ExecuteActivityAsync((OrderActivities a) => a.ReserveInventoryAsync(order.Item, order.Quantity), Options);
 
+        // Grace Period for cancellation
+        SetStatus(OrderStatus.AwaitingGracePeriod);
+        var cancelledDuringGrace = await Workflow.WaitConditionAsync(() => isCancelled, GracePeriod);
+
+        if (cancelledDuringGrace)
+        {
+            SetStatus(OrderStatus.Cancelled);
+            await Workflow.ExecuteActivityAsync((OrderActivities a) => a.SendNotificationAsync(order.OrderId, "CANCELLED", $"Cancelled: {cancellationReason}"), Options);
+            return OrderResult.Cancelled(order.OrderId, cancellationReason);
+        }
+
         // Human in the Loop: Awaiting Dispatch Approval
         SetStatus(OrderStatus.AwaitingApproval);
         await Workflow.ExecuteActivityAsync((OrderActivities a) => a.SendNotificationAsync(order.OrderId, "APPROVAL_REQUIRED", "Order awaiting manual dispatch approval."), Options);
 
         // Waits durably without consuming threads or resources until approved
+        // The current details are shown in the Web UI while the workflow waits.
+        Workflow.CurrentDetails =
+            $"**Awaiting dispatch approval** for order `{order.OrderId}`.\n\n" +
+            "Send the `approveDispatch` signal to continue, or `cancelOrder` to cancel.";
         await Workflow.WaitConditionAsync(() => isApproved);
+        Workflow.CurrentDetails = "";
 
         // Dispatch
         SetStatus(OrderStatus.Dispatching);
