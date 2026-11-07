@@ -4,6 +4,7 @@
     <modules>
       <module fileurl="file://$PROJECT_DIR$/.idea/order-management-app.iml" filepath="$PROJECT_DIR$/.idea/order-management-app.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/modules/order-service.iml" filepath="$PROJECT_DIR$/.idea/modules/order-service.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/order-service-dotnet.iml" filepath="$PROJECT_DIR$/.idea/order-service-dotnet.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/order-service-go.iml" filepath="$PROJECT_DIR$/.idea/order-service-go.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/order-service-python.iml" filepath="$PROJECT_DIR$/.idea/order-service-python.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/order-service-ts.iml" filepath="$PROJECT_DIR$/.idea/order-service-ts.iml" />

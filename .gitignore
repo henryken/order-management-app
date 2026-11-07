@@ -67,3 +67,7 @@ logs/
 ### Misc ###
 *.tmp
 *.bak
+
+### .NET ###
+bin/
+obj/
